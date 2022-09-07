@@ -6,7 +6,7 @@
 trigger:
 - main
 
-pool: LP15-YYU6-DSA
+pool: Default
 
 steps:
 - script: echo Hello, world!
