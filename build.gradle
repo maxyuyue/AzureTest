@@ -7,7 +7,7 @@ plugins {
 }
 apply plugin: 'maven-publish'
 ext {
-	projectDir   = "E:/Work/AzureTest"
+	projectDir   = "E:/Work/agent/_work/1/s/"
 	silentInstallZip = "SilentInstallScripts.zip"
 	projectFolder = "${projectDir}"
 	si_dir =  "${projectDir}/_si/"
