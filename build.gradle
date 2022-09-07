@@ -19,7 +19,7 @@ publishing() {
             groupId 'testDemo' 
             artifactId 'SilentInstallScripts' 
             version '1.0' 
-            artifact 'E:/Work/AzureTest/SilentInstallScripts.zip' 
+            artifact 'E:/Work/agent/_work/1/s/SilentInstallScripts.zip' 
         } 
     } 
 
