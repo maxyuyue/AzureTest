@@ -18,7 +18,7 @@ publishing() {
         myPublication(MavenPublication) { 
             groupId 'testDemo' 
             artifactId 'SilentInstallScripts' 
-            version Project.getVersion()
+            version '1.0.0'
             artifact 'E:/Work/agent/_work/1/s/SilentInstallScripts.zip' 
         } 
     } 
