@@ -4,7 +4,7 @@ plugins {
 }
 
 ext {
-	projectDir   = "E:/Work/TADevOps/PassportDemo"
+	projectDir   = "E:/Work/AzureTest"
 	silentInstallZip = "SilentInstallScripts.zip"
 	projectFolder = "${projectDir}"
 	si_dir =  "${projectDir}/_si/"
