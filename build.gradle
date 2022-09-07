@@ -1,0 +1,63 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+ext {
+	projectDir   = "E:/Work/TADevOps/PassportDemo"
+	silentInstallZip = "SilentInstallScripts.zip"
+	projectFolder = "${projectDir}"
+	si_dir =  "${projectDir}/_si/"
+}
+
+
+println "Workspace Directory :: workspace"
+println "Project :: projectName"
+println project.name
+println "Project directory is.. ${projectDir}"
+
+
+task init_(type:Copy) {
+	println "----> projectFolder"
+	from "."
+	exclude ".gradle"
+	into "${projectDir}/_si/"	
+}
+
+task clearSIFolder(type: Delete) {
+	dependsOn(init_)
+	   //executable "cmd"
+	  delete "${projectDir}/_si/_si"
+	  doLast { 
+	  println "--> Deleting _si folder from ${projectDir}/_si/"
+	 }
+}
+
+
+
+task zipFiles(type: Zip) {
+	dependsOn(init_)
+	dependsOn(clearSIFolder)
+	
+		zip64 true
+		archiveFileName = "${silentInstallZip}"
+		destinationDirectory = file("${projectDir}")
+		from "${si_dir}"
+		exclude "*.zip"
+		println "--> Compress/Zip all files from si folder...${si_dir}"
+	
+
+}
+
+
+
+task autobuild {
+	dependsOn(init_)
+	dependsOn(clearSIFolder)
+	dependsOn(zipFiles)
+	doLast() {
+		println "Build Success!"
+		 }		 
+	}
+	
+
