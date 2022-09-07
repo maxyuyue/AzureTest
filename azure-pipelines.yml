@@ -23,5 +23,10 @@ steps:
     jdkArchitectureOption: 'x64'
     publishJUnitResults: true
     testResultsFiles: '**/TEST-*.xml'
-    tasks: 'autobuild publish'
+    tasks: 'autobuild'
 
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: '$(Pipeline.Workspace)/s/SilentInstallScripts.zip'
+    artifact: 'SilentInstallScripts.zip'
+    publishLocation: 'pipeline'
