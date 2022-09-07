@@ -1,0 +1,1361 @@
+//SILENT_INSTALL_PROPERTY_PATH - Set this property and value (path of slient_install.properties" on node.
+
+plugins {
+    id 'java'
+    id 'application'
+}	
+allprojects {
+    apply plugin: 'java'
+}
+ext {
+	workspaceFolder = "dist"
+	install_LCS      = "installLiveCollabServer.conf"	
+	install_Spinner_file = "installSpinner.conf"
+}
+
+println "Workspace Directory :: workspace"
+println "Project :: projectName"
+println project.name
+println "Project directory is.. ${projectDir}"
+
+def confName_ = System.getProperty("paramName")
+println "Parameter From Jenkins==${confName_}"
+
+String SILENT_INSTALL_PROPERTY_PATH_ = System.getenv('SILENT_INSTALL_PROPERTY_PATH')
+println('SILENT_INSTALL_PROPERTY_PATH_' + SILENT_INSTALL_PROPERTY_PATH_)
+
+Properties properties = new Properties()
+Properties props_     = new Properties()
+if(SILENT_INSTALL_PROPERTY_PATH_) {
+	properties.load(project.file(SILENT_INSTALL_PROPERTY_PATH_).newDataInputStream())
+	def list =   properties.keys().toList()
+	list.each { props_.setProperty("@$it@", properties.getProperty(it)); }
+}
+	
+	def appname = ""
+	String MATRIX_HOME
+	String APP_NAME
+	String appDirPath
+	String ENGINUITY_HOME
+	String ENGINUITY_INSTALLER_FILE
+	String where_used_dir = "/opt/Enginuity/WhereUsedCache"
+	String installerexec  = "Enginuity_Install"
+	String KERNEL_SERVER_HOST
+	String FCS_HOST_AND_PORT
+	String FCScertname
+	String wscertname
+	String GLASSFISH_SERVER_NAME
+	String PASSPORT_URL
+	String Passportcertname
+	String caalias       = "enginuitywsca"
+	String mqlexec18xU      = "/opt/matrix/3dx/2018x/3dspace/scripts/mql"
+	String setcontext18xU   = "set context user creator"	
+	Properties eProperties = new Properties()
+	Properties eProperties_     = new Properties()
+	String INSTALL_PROPERTY_PATH_ = System.getenv('INSTALL_PROPERTY_PATH')
+	if(INSTALL_PROPERTY_PATH_!=null) {		
+		eProperties.load(project.file(INSTALL_PROPERTY_PATH_).newDataInputStream())
+		def elist =   eProperties.keys().toList()
+		elist.each { eProperties_.setProperty("@$it@", eProperties.getProperty(it)); }
+		MATRIX_HOME    = eProperties.getProperty("MATRIX_HOME")
+		APP_NAME       = eProperties.getProperty("APP_NAME")
+		ENGINUITY_HOME = eProperties.getProperty("ENGINUITY_HOME")
+		FCS_HOST_AND_PORT = eProperties.getProperty("FCS_HOST_AND_PORT")
+		appDirPath     = MATRIX_HOME+"/distrib/"+APP_NAME
+		ENGINUITY_INSTALLER_FILE = eProperties.getProperty("ENGINUITY_INSTALLER_FILE")
+		KERNEL_SERVER_HOST       = eProperties.getProperty("KERNEL_SERVER_HOST")
+		GLASSFISH_SERVER_NAME    = eProperties.getProperty("GLASSFISH_SERVER_NAME")
+		PASSPORT_URL   = eProperties.getProperty("3D_PASSPORT_URL")
+	}
+
+
+
+	def IS_ADMIN_SERVER_ = System.getenv('IS_ADMIN_SERVER')
+	String SERVER_NAME   =  System.getenv().get("HOSTNAME")
+	println "### Job is running from Server  - $SERVER_NAME "
+	
+	if (IS_ADMIN_SERVER_!=null && IS_ADMIN_SERVER_=="T") {
+		if(SERVER_NAME == "azl-eneh101") {
+			wscertname = "enginuityqa.pg.com.p12"
+		} else if(SERVER_NAME == "azl-eneh201") {
+			wscertname = "enginuityh2cloud.pg.com.p12"
+		} else if(SERVER_NAME == "azl-eneh301") {
+			wscertname = "enginuityh3cloud.pg.com.p12"
+		} else if(SERVER_NAME == "azl-enep01") {
+			wscertname = "enginuity.pg.com.p12"
+		}
+	}
+	
+	 println "appDirPath... ${appDirPath}"
+	 println "ENGINUITY_HOME... ${ENGINUITY_HOME}"
+	 println "ENGINUITY_INSTALLER_FILE.. ${ENGINUITY_INSTALLER_FILE}"
+	 println "FCS_HOST_AND_PORT...${FCS_HOST_AND_PORT}"
+	
+
+
+
+
+def __3DX_HOME_DIR_     = properties.getProperty("3DX_HOME_DIR")
+String mqlexec22xU      = "${__3DX_HOME_DIR_}/server/scripts/mql"
+String spacemqlexec22xU = "${__3DX_HOME_DIR_}/3dspace/scripts/mql"
+String setcontext22xU   = "set context user creator"
+String releasePath      = "2022x/2022x.0/"
+String jpoPath          = "2022x/2022x.0/JPO_Insert/"
+String space22x         = "${__3DX_HOME_DIR_}/3dspace/"
+String passport_TOMCAT_HOME_DIR = properties.getProperty("3DP_TOMCAT_HOME_DIR")
+String dashboard_TOMCAT_HOME_DIR = properties.getProperty("3DD_TOMCAT_HOME_DIR")
+
+
+import java.time.*
+import java.text.SimpleDateFormat
+
+gradle.taskGraph.beforeTask { Task task ->
+    task.ext.setProperty("startTime", Instant.now())
+    TimeZone.setDefault(TimeZone.getTimeZone('EST'))
+    Date date = new Date()
+    SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss")
+    println "Start time :: " + sdf.format(date)
+}
+
+gradle.taskGraph.afterTask { Task task, TaskState state ->
+    Date date = new Date()
+    SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss")
+    println "End time :: " + sdf.format(date)
+    println task.name + " took " + Duration.between(task.ext.startTime, Instant.now()).toSeconds() + " seconds"
+}
+
+task preUpgrade() {
+	doFirst() {		
+		File myFile = new File('/opt/matrix/3dx/2018x/3dspace/scripts/mxEnv.sh')
+		def isSMLVarExists = "false"
+		myFile.eachLine {line ->
+			if (line.contains("MX_MEMORY_SYSTEM_LIMIT=0"))
+				isSMLVarExists = "true"
+		}
+		println isSMLVarExists
+		if(isSMLVarExists == "false") {
+			myFile.append("\nexport MX_MEMORY_SYSTEM_LIMIT=0\n")
+		}
+	}
+	
+	doLast() {		
+		
+		def preScripts= exec {
+				println " *** Migration is in progress..."
+				commandLine "${mqlexec18xU}", "-c", "${setcontext18xU}; run 2022x/2022x.0/Upgrade_Prescript_All.tcl;   "	
+		}
+		if (preScripts.getExitValue() == 0 ) {
+			println preScripts.getExitValue()
+		} else {
+			throw new GradleException("Error.. while executing JPOs returned ${preScripts.exitValue}")
+		}
+		
+	}	
+}
+
+task fixEnvSpecificFiles() {
+		doFirst(){
+			copy{
+				from zipTree("${projectDir}/SilentInstallScripts.zip")
+				include "**/Spinner_R2022x_PG.zip","2022x/2022x.0/PostScripts/3dspace/linux_a64/code/bin/*"
+				into "${projectDir}/tmp1"
+			}
+			copy{
+				from zipTree("${projectDir}/SilentInstallScripts.zip")
+				into "${projectDir}/tmp"
+				exclude "**/*.gradle","**/Spinner_R2022x_PG.zip","2022x/2022x.0/PostScripts/3dspace/linux_a64/code/bin/*"
+				filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: props_)
+			}
+			copy {
+				from "${projectDir}/tmp/"
+				include "**/*"
+				into "${projectDir}/"
+			}
+			copy {
+				from "${projectDir}/tmp1/"
+				include "**/*"
+				into "${projectDir}/"
+			}
+			
+		}
+	}
+
+task installLCS() {
+		dependsOn('fixEnvSpecificFiles')
+		dependsOn('preUpgrade')
+		def _3DX_HOME_DIR_ = properties.getProperty("3DX_HOME_DIR")
+		def _MEDIA_DIR_    = properties.getProperty("MEDIA_DIR")
+		doLast {
+			
+			def result = exec {
+				commandLine "/opt/matrix/perl/bin/perl", "pg-install-ui.pl", "${_3DX_HOME_DIR_}",  "${_MEDIA_DIR_}" , "-f",  "conf/${install_LCS}"
+			}
+		
+			if (result.getExitValue() == 0 ) {
+				println " *** Live Collobaration Server is installed.. "
+				println result.getExitValue()
+			} else {
+				println "Error.. failed installing Live Collobaration Server.."
+			}
+		}
+	}
+
+task runCoreUpgrade() {
+		dependsOn('installLCS')
+		doFirst() {		
+			File myFile = new File("${__3DX_HOME_DIR_}/server/scripts/mxEnv.sh")
+			def isSMLVarExists = "false"
+			myFile.eachLine {line ->
+				if (line.contains("MX_MEMORY_SYSTEM_LIMIT=0"))
+					isSMLVarExists = "true"
+			}
+			println isSMLVarExists
+			if(isSMLVarExists == "false") {
+				myFile.append("\nexport MX_MEMORY_SYSTEM_LIMIT=0\n")
+			}
+		}
+		
+		doLast(){
+			def coreUpgrade = exec {
+				println " *** Core upgrade is in progress.. "
+				commandLine "${mqlexec22xU}", "-c", "${setcontext22xU}; verb on; validate upgrade; upgrade; validate upgrade;"	
+			}
+			if (coreUpgrade.getExitValue() == 0 ) {
+				println coreUpgrade.getExitValue()
+			} else {
+				throw new GradleException("Error.. while upgrading ${coreUpgrade.exitValue}")
+			}
+		}
+	}
+	
+task insertJPOs() {
+		dependsOn('runCoreUpgrade')
+		doLast(){
+			def insertjpos = exec {
+				println " *** Core upgrade is in progress.. "
+				commandLine "${mqlexec22xU}", "-c", "${setcontext22xU}; verb on; insert program ${jpoPath}"	
+			}
+			if (insertjpos.getExitValue() == 0 ) {
+				println insertjpos.getExitValue()
+			} else {
+				throw new GradleException("Error.. while upgrading ${insertjpos.exitValue}")
+			}
+		}
+	}
+	
+task executedosToUnix (){
+		dependsOn('fixEnvSpecificFiles')
+		doLast() {
+			fileTree("${projectDir}/").matching{ include "**/*.java"}.each{ aFile ->
+				exec{
+					commandLine 'dos2unix'
+					args aFile.absolutePath
+				}
+			}
+		}
+	}
+	
+
+
+task clear(type: Exec) {	
+	  executable "sh"
+	  args "-c", "rm -rf ${workspaceFolder}/* "	
+}
+
+
+task install(type: Copy) {
+	dependsOn('fixEnvSpecificFiles')
+	dependsOn('install3DPGA')
+}
+
+task runPostScripts() {
+	dependsOn('fixEnvSpecificFiles')
+	doFirst{
+		copy{
+			from ("${projectDir}/2022x/2022x.0/PostScripts/3dspace")
+			into "${__3DX_HOME_DIR_}/3dspace"
+			fileMode 0755
+		}
+		copy{
+			from zipTree("${__3DX_HOME_DIR_}/3dspace/Spinner_R2022x_PG.zip")
+			into "${__3DX_HOME_DIR_}/3dspace"
+		}
+		def isCTPVarExists = "false"
+		def isECMVarExists = "false"
+		File myFile = new File("${__3DX_HOME_DIR_}/3dspace/scripts/mxEnv.sh")
+		myFile.eachLine {line ->
+            if (line.contains("MX_CHECK_TRUSTED_PROGRAM=OFF"))
+                isCTPVarExists = "true"
+            if (line.contains("ECM_LoadECMConfig=yes"))
+                isECMVarExists = "true"
+        }
+        if(isCTPVarExists=="false")
+            myFile.append("\nexport MX_CHECK_TRUSTED_PROGRAM=OFF\n")
+        if(isECMVarExists=="false")
+            myFile.append("\nexport ECM_LoadECMConfig=yes\n")
+		
+		File myFile1 = new File("${__3DX_HOME_DIR_}/3dspace/scripts/mxEnvCAS.sh")
+		def isCTPVarExists_ = "false"
+		def isECMVarExists_ = "false"
+		def ispgEnvExists_ = "false"
+		myFile1.eachLine {line ->
+			if (line.contains("MX_CHECK_TRUSTED_PROGRAM=OFF"))
+				isCTPVarExists_ = "true"				
+			if (line.contains("ECM_LoadECMConfig=yes"))
+				isECMVarExists_ = "true"
+			if (line.contains("/opt/matrix/3dx/22x/3dspace/scripts/pgEnv.sh"))
+				ispgEnvExists_ = "true"
+		}
+		if(isCTPVarExists_=="false")
+			myFile1.append("\nexport MX_CHECK_TRUSTED_PROGRAM=OFF\n")
+		if(isECMVarExists_=="false")
+			myFile1.append("\nexport ECM_LoadECMConfig=yes\n")
+		if(ispgEnvExists_=="false")
+			myFile1.append("\n. /opt/matrix/3dx/22x/3dspace/scripts/pgEnv.sh\n")
+	}
+	doLast {
+		def PostScripts= exec {
+				println " *** Migration is in progress..."
+				commandLine "${spacemqlexec22xU}", "-c", "${setcontext22xU}; run 2022x/2022x.0/Upgrade_Postscript_All.tcl;   "	
+		}
+		if (PostScripts.getExitValue() == 0 ) {
+			println PostScripts.getExitValue()
+		} else {
+			throw new GradleException("Error.. while executing JPOs returned ${PostScripts.exitValue}")
+		}
+	}
+}	
+	
+task installTask() {
+	dependsOn('fixEnvSpecificFiles')
+	def _3DX_HOME_DIR_ = properties.getProperty("3DX_HOME_DIR")
+	def _MEDIA_DIR_    = properties.getProperty("MEDIA_DIR")
+	
+	def confName = System.getProperty("paramName")	
+	println "Here it is... ${confName} "
+	
+	if(confName!=null && confName.contains("3DSpace") && !confName.contains("ndex")) {
+		dependsOn('watch3dsMqlScript')
+		if(confName.contains("3DSpaceGA")) {
+			appname="3dspace"
+			//dependsOn('watchSysJarStarter')
+		}
+	}
+	if(confName!=null && confName.contains("FCSGA")) {
+		appname="fcs"
+		//dependsOn('watchSysJarStarter')
+	}
+	if(confName!=null && confName.contains("FedSearchGA")) {
+		appname="fedsearch"
+		//dependsOn('watchSysJarStarter')
+	}
+
+	if (confName!=null && confName!="SelectOne") {
+		println "Installing ${confName}.conf"		
+		doFirst() {
+			if(confName.contains("3DSpaceIndexGA") && !confName.contains("Converter")) {
+				File myFile1 = new File("${_3DX_HOME_DIR_}/3dspaceindex")
+				def isDirectoryExists = myFile1.isDirectory()
+				if (isDirectoryExists) {
+					def fileCount = myFile1.list().length
+					if (fileCount > 0) {
+						throw new GradleException("Exalead Target Folder 3dspaceindex is not empty. Please backup the existing install and then proceed")
+					}
+				}
+			}
+			if(confName.contains("AppsGA")) {
+				File myFile = new File("${_3DX_HOME_DIR_}/3dspace/scripts/mxEnv.sh")
+				def isSMLVarExists = "false"
+				myFile.eachLine {line ->
+					if (line.contains("MX_MEMORY_SYSTEM_LIMIT=0"))
+						isSMLVarExists = "true"
+				}
+				println isSMLVarExists
+				if(isSMLVarExists == "false") {
+					myFile.append("\nexport MX_MEMORY_SYSTEM_LIMIT=0\n")
+				}
+			}
+			
+		}
+
+		doLast {
+			def result = exec {
+				commandLine "/opt/matrix/perl/bin/perl", "pg-install-ui.pl", "${_3DX_HOME_DIR_}",  "${_MEDIA_DIR_}" , "-f",  "conf/${confName}.conf"
+			}
+			if (result.getExitValue() == 0 ) {
+				println "## ${confName}.conf - Installation is successful "
+				println result.getExitValue()
+				
+				if(confName!=null && confName.contains("3DNotification")) {
+					ant.replaceregexp(
+						file:  "${_3DX_HOME_DIR_}/3dnotification/linux_a64/code/command/node",
+						match:   "bootstrap.js",
+						replace: "bootstrap.js\n\nexport ORACLE_HOME=/usr/lib/oracle/12.2/client64\nexport LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$ORACLE_HOME/lib:user/local/lib\n\n"
+					)
+					exec {
+						commandLine ('chmod', '755', '${_3DX_HOME_DIR_}/3dnotification/linux_a64/code/command/node')
+					}
+				}
+				if(confName!=null && confName.contains("FCSFD")) {
+					println "Updating mxEnv.sh...."
+					ant.replace(file: "${__3DX_HOME_DIR_}/fcs/scripts/mxEnv.sh", token: 'MX_JAVA_OPTIONS="-Dfile.encoding=UTF-8 -Djava.awt.headless=true -Xss1024k -Xms960m -Xmx960m  "', value: '#MX_JAVA_OPTIONS="-Dfile.encoding=UTF-8 -Djava.awt.headless=true -Xss1024k -Xms960m -Xmx960m  " \nMX_JAVA_OPTIONS="-Xss1m -Xms8g -Xmx8g  -Xmn4g -XX:MetaspaceSize=768m -XX:MaxMetaspaceSize=768m  -XX:SurvivorRatio=3 -XX:+UseCompressedOops -XX:+DisableExplicitGC -Dfile.encoding=UTF-8 -Djava.awt.headless=true -XX:+UseShenandoahGC -Xlog:gc*:/opt/matrix/3dx/22x/fcs/logsCAS/GC_${SERVER_NAME}_`date +%F_%H-%M`.Log:time,level,tags" ')
+				}
+				if(confName!=null && confName.contains("3DPFD")) {
+					println "3DP_TOMCAT_HOME_DIR is ${passport_TOMCAT_HOME_DIR}"
+					/*println "Starting 3DP TomEE to extract war file...."
+					exec {
+						workingDir "${passport_TOMCAT_HOME_DIR}/bin"
+						commandLine "sh", "-c", "./startup.sh"
+					}
+					sleep(1000 * 30)
+					println "Shuting down 3DP service...."
+					exec {
+						workingDir "${passport_TOMCAT_HOME_DIR}/bin"
+						commandLine "sh", "-c", "./shutdown.sh"
+					}*/
+					
+					exec{
+						workingDir "${passport_TOMCAT_HOME_DIR}/webapps"
+						commandLine "unzip", "3dpassport.war", "-d", "3dpassport"
+					}
+					sleep(1000 * 20)
+					println "Updating cas.session.timeout.sliding in cas.properties...."
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/classes/cas.properties", token: 'cas.session.timeout.sliding=7200000', value: 'cas.session.timeout.sliding=14400000')
+
+					println "Updating cas.tgt.numberOfUses in cas.properties...."
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/classes/cas.properties", token: 'cas.tgt.numberOfUses=500', value: 'cas.tgt.numberOfUses=1500')
+
+					println "Updating sessionFactory.dataSource.maxPoolSize in ac-repos.xml...."
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/ac-repos.xml", token: '<entry key="sessionFactory.dataSource.maxPoolSize" value="30"/>', value: '<entry key="sessionFactory.dataSource.maxPoolSize" value="50"/>')
+
+					println "Updating maxPoolSize in applicationContext-cas.xml and applicationContext-sql.xml...."
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-cas.xml", token: '<property name="maxPoolSize" value="30" />', value: '<property name="maxPoolSize" value="50" />')
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-sql.xml", token: '<property name="maxPoolSize" value="30" />', value: '<property name="maxPoolSize" value="50" />')
+
+					println "Updating unreturnedConnectionTimeout in applicationContext-cas.xml and applicationContext-sql.xml...."
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-cas.xml", token: '<property name="numHelperThreads" value="3" />', value: '<property name="numHelperThreads" value="3" /> \n        <property name="unreturnedConnectionTimeout" value="15" />')
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-sql.xml", token: '<property name="numHelperThreads" value="10" />', value: '<property name="numHelperThreads" value="10" /> \n        <property name="unreturnedConnectionTimeout" value="15" />')
+
+					println "Updating fileLoggerWriter in ac-logs.xml...."
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/ac-logs.xml", token: '<bean id="dbLoggerWriter"', value: '<bean id="fileLoggerWriter" class="com.dassault_systemes.dspassport.core.logging.BasicIamLoggerWriter"/>\n\n    <bean id="dbLoggerWriter"')
+					ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/ac-logs.xml", token: '<property name="replacement" ref="dbLoggerWriter"/>', value: '<property name="replacement" ref="fileLoggerWriter"/>')
+					
+				}
+				if(confName!=null && confName.contains("3DDFD")) {
+					println "3DD_TOMCAT_HOME_DIR is ${dashboard_TOMCAT_HOME_DIR}"
+					/*println "Starting 3DD TomEE to extract war file...."
+					exec {
+						workingDir "${dashboard_TOMCAT_HOME_DIR}/bin"
+						commandLine "sh", "-c", "./startup.sh"
+					}
+					sleep(1000 * 30)
+					println "Shuting down 3DP service...."
+					exec {
+						workingDir "${dashboard_TOMCAT_HOME_DIR}/bin"
+						commandLine "sh", "-c", "./shutdown.sh"
+					}*/
+					exec{
+						workingDir "${dashboard_TOMCAT_HOME_DIR}/webapps"
+						commandLine "unzip", "3ddashboard.war", "-d", "3ddashboard"
+					}
+					sleep(1000 * 20)
+					println "Updating web.xml...."
+					ant.replace(file: "${dashboard_TOMCAT_HOME_DIR}/webapps/3ddashboard/WEB-INF/web.xml", token: '</cookie-config>', value: '</cookie-config>\n    <tracking-mode>COOKIE</tracking-mode>')
+
+				}
+				if(confName!=null && confName.contains("COSFD")) {
+					copy {
+						from "${projectDir}/conf/pgdeploy.param"
+						into "${__3DX_HOME_DIR_}/3DOrchestrate/linux_a64/reffiles/SMAExeServer/deploy/"
+						filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: eProperties_)
+					}
+				
+					def cosDeploy = exec {
+						workingDir "${__3DX_HOME_DIR_}/3DOrchestrate/linux_a64/reffiles/SMAExeServer/deploy/"
+						commandLine 'sh', '-c', "./smaexe-deploy.sh pgdeploy.param build,create,config,deploy"
+					}
+					if (cosDeploy.getExitValue() == 0 ) {
+						println cosDeploy.getExitValue()
+					} else {
+						throw new GradleException("Task deployCOS returned ${cosDeploy.exitValue}")
+					}
+
+					println "Updating setenv.sh...."
+					ant.echo(file: "${__3DX_HOME_DIR_}/3DOrchestrate/exe1/tomee/bin/setenv.sh",  append: "true", "export http_proxy=''\n")
+					ant.echo(file: "${__3DX_HOME_DIR_}/3DOrchestrate/exe1/tomee/bin/setenv.sh",  append: "true", "export https_proxy=''\n")
+					ant.echo(file: "${__3DX_HOME_DIR_}/3DOrchestrate/exe1/tomee/bin/setenv.sh",  append: "true", "export DSLS_CONFIG=/opt/matrix/3dx/22x/license/DSLicSrv.txt\n")
+
+					println "Updating SMAExeServer-exe1.properties...."
+					ant.replace(file: "${__3DX_HOME_DIR_}/3DOrchestrate/config/SMAExeServer-exe1.properties", token: '#fiper.security.runas.enabled=true', value: 'fiper.security.runas.enabled=true')
+					ant.replace(file: "${__3DX_HOME_DIR_}/3DOrchestrate/config/SMAExeServer-exe1.properties", token: '#fiper.security.runas.domain=', value: 'fiper.security.runas.domain=')
+				}
+
+			} else {
+				println "## ${confName}.conf - Installation failed "
+			}
+		}
+	}
+}
+
+task installSpinner() {
+	dependsOn('fixEnvSpecificFiles')
+	def _3DX_HOME_DIR_ = properties.getProperty("3DX_HOME_DIR")
+	def _MEDIA_DIR_ = properties.getProperty("MEDIA_DIR")
+	doLast {
+		def result = exec {
+			commandLine "/opt/matrix/perl/bin/perl", "pg-install-ui.pl", "${_3DX_HOME_DIR_}",  "${_MEDIA_DIR_}" , "-f",  "conf/${install_Spinner_file}"
+		}
+		if (result.getExitValue() == 0 ) {
+			println " successss "
+			println result.getExitValue()
+		} else {
+			println "Error.. failed..."
+		}
+	}
+}
+
+task runUpgradePostScript() {
+	dependsOn('fixEnvSpecificFiles')
+	doLast {
+		def runPS = exec {
+				println " *** runUpgradePostScript is in progress..."
+				commandLine "${spacemqlexec22xU}", "-c", "${setcontext22xU};  tcl; set rc [catch { mql run 2022x/2022x.0/Upgrade_Postscript_All.tcl } msg];"	
+				
+		}
+		if (runPS.getExitValue() == 0 ) {
+			println runPS.getExitValue()
+		} else {
+			throw new GradleException("Error.. while executing runUpgradePostScript - returned ${runPS.exitValue}")
+		}
+	}
+}
+
+task copyItextLicences() {
+	dependsOn('fixEnvSpecificFiles')
+	doLast(){
+		copy{
+			from "${projectDir}/Licenses/22x/"
+			include "**/*.xml"
+			into "${space22x}/"
+			
+		}
+	}
+}
+
+task watch3dsMqlScript() {
+	doFirst() {
+			fileTree("${projectDir}/").matching{ include "**/*.sh"}.each{ aFile ->
+				exec{
+					commandLine 'dos2unix'
+					args aFile.absolutePath
+				}
+			}
+			exec {
+			  commandLine('chmod', '+x', 'watch3dsMqlScript.sh')
+			}
+		}
+    doLast() {
+        ext.process = new ProcessBuilder().directory(projectDir).command("./watch3dsMqlScript.sh").start()
+    }
+}
+
+task watchSysJarStarter() {
+	doFirst() {
+			fileTree("${projectDir}/").matching{ include "**/*.sh"}.each{ aFile ->
+				exec{
+					commandLine 'dos2unix'
+					args aFile.absolutePath
+				}
+			}
+			exec {
+			  commandLine('chmod', '+x', 'watchSysJarStarter.sh')
+			}
+		}
+    doLast() {
+        ext.process = new ProcessBuilder().directory(projectDir).command("./watchSysJarStarter.sh", appname).start()
+    }
+}
+
+task tasksList(){
+		def buildAliases = [
+			'enginuity-all' : [	'fixEnvSpecificVars',
+								'removeSomeCustomJarsFromEngApp',
+								'moveEngServerBaseDir',
+								'extractEngInstaller',
+								'deployEnginuityPreScripts',
+								'chmod_task',
+								'startOpenLDAP',
+								'runInstaller',
+								'stopEnginuity',
+								'CertImport_EngStop',
+								'postInstalls',
+								'startEnginuity',
+								'enableGFSecureAdmin',
+								'enableMonitoring',
+								'checkCertImport_EngStart',
+								'stopEnginuity',
+								'updateEngStartStopScripts'
+							],
+			'enginuity-preInstall' : [	'fixEnvSpecificVars',
+								'removeSomeCustomJarsFromEngApp',
+								'moveEngServerBaseDir',
+								'extractEngInstaller',
+								'deployEnginuityPreScripts',
+								'chmod_task',
+								'startOpenLDAP'								
+							],
+			'enginuity-postInstall' : [
+								'stopEnginuity',
+								'CertImport_EngStop',
+								'postInstalls',
+								'startEnginuity',
+								'enableGFSecureAdmin',
+								'enableMonitoring',
+								'checkCertImport_EngStart',
+								'stopEnginuity',
+								'updateEngStartStopScripts'
+							]
+
+							
+		 ]
+		def expandedTaskList = []
+		gradle.startParameter.taskNames.each {
+			expandedTaskList << (buildAliases[it] ? buildAliases[it] : it)
+		}
+		gradle.startParameter.taskNames = expandedTaskList.flatten()
+	}
+
+
+ 
+ task removeSomeCustomJarsFromEngApp(){
+	doLast(){
+		new File("${projectDir}/engTmp/enginuity_exclude_jars.txt").eachLine { line ->	
+			delete("${appDirPath}/"+line)
+		}
+	}
+ }
+ 
+ task moveEngServerBaseDir(){
+	File myFile1 = new File("${ENGINUITY_HOME}")
+	def isDirectoryExists = myFile1.isDirectory()
+	if (isDirectoryExists) {
+		doLast(){
+			def date = new Date()
+			def formattedDate = date.format('yyyyMMddHHmmss')
+			exec {
+					executable "sh"
+					args "-c", "mv ${ENGINUITY_HOME} ${ENGINUITY_HOME}_Copy_${formattedDate}"
+				}
+		}
+	}
+ }
+ 
+ task extractEngInstaller(){
+	doLast(){
+		mkdir "${where_used_dir}"
+		copy {
+			from zipTree("${ENGINUITY_INSTALLER_FILE}")
+			into "${ENGINUITY_HOME}"
+		} 
+	}
+ }
+ 
+  task fixEnvSpecificVars(){
+	doFirst(){
+	
+		println "${eProperties}"
+		println "${eProperties_}"
+		copy{
+			from zipTree("${projectDir}/SilentInstallScripts.zip")
+			into "${projectDir}/engTmp"
+		}
+ 
+		copy{
+			from "${projectDir}/engTmp/2022x/2022x.0/PreScripts/Enginuity/InstallScripts/configs"
+			into "${projectDir}/engTmp1"
+			include "dbmod.properties"
+			filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: eProperties_)
+		}
+		
+		File dbmodFile = new File("${projectDir}/engTmp1/dbmod.properties")
+		String MIDDLE_TIER_HOST_NAME      = eProperties.getProperty("MIDDLE_TIER_HOST_NAME")
+		String MIDDLE_TIER_REACTOR_PORTS  = eProperties.getProperty("MIDDLE_TIER_REACTOR_PORTS")
+		String SOCKET_FILE_TRANSFER_PORTS = eProperties.getProperty("SOCKET_FILE_TRANSFER_PORTS")
+		
+		String[] strArr  = MIDDLE_TIER_REACTOR_PORTS.split("\\|")
+		String[] strArr1 = SOCKET_FILE_TRANSFER_PORTS.split("\\|")
+		
+		def i = 1
+		for(String eachPort in strArr) {
+			if(i==1) {
+				dbmodFile.append("MiddleTierHostName=${MIDDLE_TIER_HOST_NAME}\n")
+				dbmodFile.append("MiddleTierReactorPort=${eachPort}\n")
+				dbmodFile.append("MiddleTierHostName${i}=${MIDDLE_TIER_HOST_NAME}\n")
+				dbmodFile.append("MiddleTierReactorPort${i}=${eachPort}\n")
+			} else {
+				dbmodFile.append("MiddleTierHostName${i}=${MIDDLE_TIER_HOST_NAME}\n")
+				dbmodFile.append("MiddleTierReactorPort${i}=${eachPort}\n")
+			}				
+			i++
+		}
+		def j = 1
+		for(String eachTPort in strArr1) {
+			dbmodFile.append("serverParameters${j}=-DProcterCategory\\=true\n")
+			dbmodFile.append("SocketFileTransferPort1${j}=${eachTPort}\n")
+			j++
+		}
+		
+		copy {
+			from "${projectDir}/engTmp1/dbmod.properties"
+			into "${projectDir}/engTmp/2022x/2022x.0/PreScripts/Enginuity/InstallScripts/configs"
+		}
+	}
+  }
+ 
+ task deployEnginuityPreScripts(){
+	doFirst(){
+		copy{
+			from "${projectDir}/engTmp/2022x/2022x.0/PreScripts/Enginuity/"
+			into "${ENGINUITY_HOME}"
+		}
+	}	
+ }
+
+ task chmod_task(){
+	doFirst(){
+		exec {
+			 commandLine('chmod', '-R', '+x', "${ENGINUITY_HOME}")
+		}
+	}
+	doLast(){
+		 String files_ = "staging/payara5/bin/asadmin,staging/payara5/glassfish/bin/asadmin,InstallScripts/scripts/dbModScanDirectories.bsh,staging/payara5/glassfish/config/asenv.conf"
+		 String[] arr3 = files_.split(",")
+		 for(String eachFile in arr3) {
+			exec{
+					commandLine 'dos2unix'
+					args "${ENGINUITY_HOME}/${eachFile}"
+				}
+		 }
+	}
+ }
+ 
+ task startOpenLDAP(){
+ 	def IS_ADMIN_SERVER = System.getenv('IS_ADMIN_SERVER')
+	if (IS_ADMIN_SERVER!=null && IS_ADMIN_SERVER=="T") {
+		doFirst(){
+			mkdir "${ENGINUITY_HOME}/OpenLDAP/db"
+			mkdir "${ENGINUITY_HOME}/OpenLDAP/run"
+		}
+		doLast(){
+			exec{
+				workingDir "${ENGINUITY_HOME}/bin"
+				commandLine 'sh', '-c', "./startOpenLDAP.sh"
+			}
+		}
+	}else {
+			println "Skipping Post Installer for Non-Admin servers"
+	}
+ }
+ 
+task runInstaller(){
+	doFirst {
+		println 'Start Enginuity Installation'
+	}
+	
+	doLast(){
+		def engInstallRes = exec {
+		workingDir "${ENGINUITY_HOME}/bin"
+		commandLine 'sh', '-c', "./Enginuity_Install"
+		println 'End Enginuity Installation'
+	}
+	
+		if (engInstallRes.getExitValue() == 0 ) {
+			println engInstallRes.getExitValue()
+		} else {
+			throw new GradleException("Task runInstaller returned ${engInstallRes.exitValue}")
+		}
+	}
+}
+
+
+ task stopEnginuity(){
+	doLast(){		
+		
+		def engStop = exec {
+			workingDir "${ENGINUITY_HOME}/bin"
+			commandLine 'sh', '-c', "./enginuityStop"
+		}
+		if (engStop.getExitValue() == 0 ) {
+			println engStop.getExitValue()
+		} else {
+			throw new GradleException("Task stopEnginuity returned ${engStop.exitValue}")
+		}
+		
+		sleep(30 * 1000)
+		println "killing Glassfish process if exists...."
+		
+		def engKill = exec {
+			workingDir "${ENGINUITY_HOME}/bin"
+			commandLine 'sh', '-c', "./kill_gf.sh"
+		}
+		if (engKill.getExitValue() == 0 ) {
+			println engKill.getExitValue()
+		} else {
+			throw new GradleException("Task stopEnginuity returned ${engKill.exitValue}")
+		}			
+	}
+ }
+ 
+ 
+ task postInstalls(){
+	doFirst(){
+		def IS_ADMIN_SERVER = System.getenv('IS_ADMIN_SERVER')
+		if (IS_ADMIN_SERVER!=null && IS_ADMIN_SERVER=="T") {
+			println "Installing Post Installation Script on Admin Server...."
+			
+			println "Updating localhost with ${KERNEL_SERVER_HOST} in client.jnlp...."			
+			ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/docroot/client/client.jnlp", token: "localhost", value: "${KERNEL_SERVER_HOST}")
+			
+			println "Copying client dir to client64...."			
+			copy{
+				from("${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/docroot/client")
+				into("${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/docroot/client64")
+			}
+			
+			println "Updating max-heap-size from 900m to 3000m in client64/client.jnlp...."
+			ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/docroot/client64/client.jnlp", token: 'max-heap-size="900m"', value: 'max-heap-size="3000m"')
+			
+			println "Updating client64/client.jnlp URL...."
+			ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/docroot/client64/client.jnlp", token: '/client', value: "/client64")
+			
+			println "Updating rotationLimitInBytes"
+			ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config/logging.properties", token: "com.sun.enterprise.server.logging.GFFileHandler.rotationLimitInBytes=20000000", value: "com.sun.enterprise.server.logging.GFFileHandler.rotationLimitInBytes=200000000")
+			
+			println "Updating max files to keep in glassfish"
+			ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config/logging.properties", token: "com.sun.enterprise.server.logging.GFFileHandler.maxHistoryFiles=15", value: "com.sun.enterprise.server.logging.GFFileHandler.maxHistoryFiles=30")
+			
+			/*println "Creating certificate using openssl...."
+			def res = exec {
+				commandLine "sh", "-c", "openssl s_client -showcerts -connect ${FCS_HOST_AND_PORT} </dev/null 2> /dev/null|openssl x509 -outform PEM > /tmp/boa1.pem"
+			}
+
+		println "Importing certificate to keystore..."
+		def res1 = exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+			commandLine 'sh', '-c', "${ENGINUITY_HOME}/bin/importCertToKeystore.sh"
+		}
+
+		println "Importing certificate to cacerts..."
+		def res3 = exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+			commandLine 'sh', '-c', "${ENGINUITY_HOME}/bin/importCertToCacerts.sh"
+		}*/
+		
+		copy {
+			from("${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config")
+			into("${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config")
+			include("admin-keyfile")
+			rename("admin-keyfile","admin-keyfile.orig")
+		}
+		
+		copy {
+			from("${projectDir}/engTmp/2022x/2022x.0/PreScripts/Enginuity/bin/admin-keyfile")
+			into("${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config/")
+		}
+		
+		println "Updating domain.xml on Admin Server...."
+		println "Updating Xmx param from 1024m to 8192m in domain.xml...."
+		ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config/domain.xml", token: "Xmx1024m", value: "Xmx8192m")
+		
+		ant.replace(file: "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config/domain.xml",
+                    token: "-Xmx8192m</jvm-options>",
+                    value: "-Xmx8192m</jvm-options>\n<jvm-options>-Dcom.enginuity.kernel.url=${KERNEL_SERVER_HOST}</jvm-options>\n<jvm-options>-Dcom.enginuity.kernel.port=9998</jvm-options>")
+		
+		delete("${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/lib/classes")
+		//exec { commandLine "ln", "-sf", "${MATRIX_HOME}/distrib/${APP_NAME}/WEB-INF/classes", "classes"}
+		} else {
+			println "Skipping Post Installer for Non-Admin servers"
+		}
+	}
+ }
+ 
+ task startEnginuity(){
+	doLast(){
+		if(IS_ADMIN_SERVER_ == "T" ) {
+			def engStart = exec {
+				workingDir "${ENGINUITY_HOME}/bin"
+				commandLine 'sh', '-c', "./enginuityStart"
+			}
+			if (engStart.getExitValue() == 0 ) {
+				println engStart.getExitValue()
+			} else {
+				throw new GradleException("Task startEnginuity returned ${engStart.exitValue}")
+			}
+			sleep(30 * 1000)
+		}
+	}
+ }
+
+task enableGFSecureAdmin(){
+	doFirst(){
+		def IS_ADMIN_SERVER = System.getenv('IS_ADMIN_SERVER')
+		if (IS_ADMIN_SERVER!=null && IS_ADMIN_SERVER=="T") {
+			println "Enabling the glassfish admin...."
+			ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enginuitygf.pwdfile", "AS_ADMIN_PASSWORD=J0t1iWdHByUrbI\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enginuitygf.pwdfile",  append: "true", "AS_ADMIN_ADMINPASSWORD=J0t1iWdHByUrbI\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enginuitygf.pwdfile",  append: "true", "AS_ADMIN_USERPASSWORD=J0t1iWdHByUrbI\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enginuitygf.pwdfile",  append: "true", "AS_ADMIN_MASTERPASSWORD=J0t1iWdHByUrbI")
+			def res1 = exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/bin"
+			commandLine "sh", "-c", "${ENGINUITY_HOME}/payara5/glassfish/bin/asadmin --port 9948 --user admin --interactive=false --passwordfile enginuitygf.pwdfile enable-secure-admin"
+			}
+			println "Enabling the webservice custom cert...."
+			def res2 = exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/bin"
+			commandLine "sh", "-c", "${ENGINUITY_HOME}/payara5/glassfish/bin/asadmin --port 9948 --user admin --interactive=false --passwordfile enginuitygf.pwdfile set configs.config.server-config.network-config.protocols.protocol.http-listener-2.ssl.cert-nickname=${caalias}"
+			}
+		}
+		else {
+			println "Skipping for Non-Admin servers"
+		}
+
+
+	}
+}
+
+task enableMonitoring(){
+	doFirst(){
+		def IS_ADMIN_SERVER = System.getenv('IS_ADMIN_SERVER')
+		if (IS_ADMIN_SERVER!=null && IS_ADMIN_SERVER=="T") {
+			println "Enabling the monitoring...."
+			ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enable-monitoring.txt", "set configs.config.server-config.monitoring-service.module-monitoring-levels.connector-connection-pool=HIGH\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enable-monitoring.txt",  append: "true", "set configs.config.server-config.monitoring-service.module-monitoring-levels.connector-service=HIGH\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enable-monitoring.txt",  append: "true", "set configs.config.server-config.monitoring-service.module-monitoring-levels.ejb-container=HIGH\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enable-monitoring.txt",  append: "true", "set configs.config.server-config.monitoring-service.module-monitoring-levels.jms-service=HIGH\n")
+			ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enable-monitoring.txt",  append: "true", "set configs.config.server-config.monitoring-service.module-monitoring-levels.jvm=LOW\n")
+            ant.echo(file: "${ENGINUITY_HOME}/payara5/glassfish/bin/enable-monitoring.txt",  append: "true", "set configs.config.server-config.monitoring-service.module-monitoring-levels.web-container=LOW")
+
+			def res1 = exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/bin"
+			commandLine "sh", "-c", "${ENGINUITY_HOME}/payara5/glassfish/bin/asadmin --port 9948 --user admin --passwordfile enginuitygf.pwdfile multimode --file enable-monitoring.txt"
+			}
+		}
+		else {
+			println "Skipping for Non-Admin servers"
+		}
+
+
+	}
+} 
+
+task updateEngStartStopScripts(){
+	doFirst(){
+		def res1 = exec {
+			commandLine "chmod", "755", "${ENGINUITY_HOME}/bin/enginuityStart"						
+		}
+		def res2 = exec {
+			commandLine "chmod", "755", "${ENGINUITY_HOME}/bin/enginuityStop"						
+		}
+		println "Matrix home----------->$MATRIX_HOME"
+		ant.replaceregexp(
+				file:  "${ENGINUITY_HOME}/bin/enginuityStart",
+				match:   "fi\n",
+				replace: "fi\n\nexport ENGINUITY_HOME=/opt/Enginuity/2022x\nexport DSLS_CONFIG=${MATRIX_HOME}/DSLicSrv.txt\nexport http_proxy=''\nexport https_proxy=''\n\n"
+		)
+		
+		if(IS_ADMIN_SERVER_ == "T" ) {
+			ant.replaceregexp(file: "${ENGINUITY_HOME}/bin/enginuityStop", match: 'kill `cat "/opt/Enginuity/2022x/apache-activemq-5.16.4/activemq.pid"`', replace: 'kill `cat "/opt/Enginuity/2022x/OpenLDAP/run/slapd.pid"`${line.separator}kill `cat "/opt/Enginuity/2022x/apache-activemq-5.16.4/activemq.pid"`', flags: "g", byline: "true")
+			
+			ant.replaceregexp(
+					file:  "${ENGINUITY_HOME}/bin/enginuityStart",
+					match:   "enginuityEnv.sh\"\n",
+					replace: "enginuityEnv.sh\"\ncd /opt/Enginuity/2022x/OpenLDAP\necho \"Starting OpenLDAP\"\n/usr/sbin/slapd -f /opt/Enginuity/2022x/OpenLDAP/slapd.conf -h \"ldap://0.0.0.0:9389\"\necho \"Waiting for OpenLDAP\" to start...\nsleep 5\n\n"
+			)
+		}
+		ant.replaceregexp(
+				file:  "${ENGINUITY_HOME}/bin/enginuityStop",
+				match:   "fi\n",
+				replace: "fi\n\nexport ENGINUITY_HOME=/opt/Enginuity/2022x\n"
+		)
+
+		def res3 = exec {
+			commandLine "chmod", "755", "${ENGINUITY_HOME}/bin/enginuityStart"						
+		}
+		def res4 = exec {
+			commandLine "chmod", "755", "${ENGINUITY_HOME}/bin/enginuityStop"						
+		}
+	}
+}
+
+
+task upgradeTasks(){
+		dependsOn('fixEnvSpecificFiles')
+		dependsOn('executedosToUnix').mustRunAfter('fixEnvSpecificFiles')
+		dependsOn('preUpgrade').mustRunAfter('executedosToUnix')
+		dependsOn('installLCS').mustRunAfter('preUpgrade')
+		dependsOn('runCoreUpgrade').mustRunAfter('installLCS')
+		dependsOn('insertJPOs').mustRunAfter('runCoreUpgrade')
+	}
+	
+	task deployKernelPP(){
+		dependsOn('fixEnvSpecificFiles')
+		doLast() {
+				copy {
+					from "${projectDir}/${releasePath}/PostScripts/3dspace/linux_a64/code/bin/"
+					include "**/*"
+					into "${__3DX_HOME_DIR_}/3dspace/linux_a64/code/bin/"
+				}
+				println " #### PP's are copied into ${__3DX_HOME_DIR_}/3dspace/linux_a64/code/bin/"			
+		}
+	}
+	task runWarUtil(){
+		doLast() {
+			def warUtilStart = exec {
+				workingDir "${__3DX_HOME_DIR_}/3dspace/linux_a64/code/command"
+				commandLine 'sh', '-c', "./BuildDeploy3DSpace_CAS.sh"
+			}
+			if (warUtilStart.getExitValue() == 0 ) {
+				println warUtilStart.getExitValue()
+			} else {
+				throw new GradleException("Task runWarUtil returned ${warUtilStart.exitValue}")
+			}
+		}
+	}
+	
+	task deployCOS(){
+		doFirst(){
+			copy {
+				from "${projectDir}/conf/pgdeploy.param"
+				into "${__3DX_HOME_DIR_}/3DOrchestrate/linux_a64/reffiles/SMAExeServer/deploy/"
+				filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: eProperties_)
+			}
+		}
+		doLast(){
+			def cosDeploy = exec {
+				workingDir "${__3DX_HOME_DIR_}/3DOrchestrate/linux_a64/reffiles/SMAExeServer/deploy/"
+				commandLine 'sh', '-c', "./smaexe-deploy.sh pgdeploy.param build,create,config,deploy"
+			}
+			if (cosDeploy.getExitValue() == 0 ) {
+				println cosDeploy.getExitValue()
+			} else {
+				throw new GradleException("Task deployCOS returned ${cosDeploy.exitValue}")
+			}
+
+			println "Updating setenv.sh...."
+			ant.echo(file: "${__3DX_HOME_DIR_}/3DOrchestrate/exe1/tomee/bin/setenv.sh",  append: "true", "export http_proxy=''\n")
+			ant.echo(file: "${__3DX_HOME_DIR_}/3DOrchestrate/exe1/tomee/bin/setenv.sh",  append: "true", "export https_proxy=''\n")
+			ant.echo(file: "${__3DX_HOME_DIR_}/3DOrchestrate/exe1/tomee/bin/setenv.sh",  append: "true", "export DSLS_CONFIG=/opt/matrix/3dx/22x/license/DSLicSrv.txt\n")
+
+			println "Updating SMAExeServer-exe1.properties...."
+			ant.replace(file: "${__3DX_HOME_DIR_}/3DOrchestrate/config/SMAExeServer-exe1.properties", token: '#fiper.security.runas.enabled=true', value: 'fiper.security.runas.enabled=true')
+			ant.replace(file: "${__3DX_HOME_DIR_}/3DOrchestrate/config/SMAExeServer-exe1.properties", token: '#fiper.security.runas.domain=', value: 'fiper.security.runas.domain=')
+
+		}
+	}
+	
+task CertImport_EngStop(){
+	doFirst(){
+		//Check if env variable is missing
+		if (PASSPORT_URL != null){
+			Passportcertname = PASSPORT_URL.minus("https://").minus("/3dpassport") + ".cer"
+		} else{
+			throw new GradleException("Error..PASSPORT_URL missing")
+		}
+		println "Passportcertname is ${Passportcertname}"
+
+		if (FCS_HOST_AND_PORT != null){
+			FCScertname = FCS_HOST_AND_PORT.minus(":443") + ".cer"
+		} else{
+			throw new GradleException("Error..FCS_HOST_AND_PORT missing")
+		}
+		println "FCScertname is ${FCScertname}"
+
+		if (GLASSFISH_SERVER_NAME != null){
+			println "All Env variables exist in property file!"
+		} else{
+			throw new GradleException("Error..GLASSFISH_SERVER_NAME missing")
+		}
+
+		//Check if cert file is missing
+		println "checking existense of FCS certs..."
+		//String fcscert = projectDir.path+"/engTmp/certs/enginuity/fcs/"+FCScertname
+		if (file(projectDir.path+"/engTmp/certs/enginuity/fcs/"+FCScertname).exists()){
+			println "FCS certificate is available in project directory!"
+		} else{
+			throw new GradleException("FCS certificate missing !!!!!!!!!") 
+		}
+		println "checking existense of SSL certs..."
+		//def sslcert = '${projectDir}/engTmp/certs/enginuity/ssl/${GLASSFISH_SERVER_NAME}/${GLASSFISH_SERVER_NAME}.crt'
+		if (file(projectDir.path+"/engTmp/certs/enginuity/ssl/"+GLASSFISH_SERVER_NAME+"/"+GLASSFISH_SERVER_NAME+".crt").exists()){
+			println "SSL certificates are available in project directory!"
+		} else{
+			throw new GradleException("SSL certificate missing !!!!!!!!!") 
+		}
+		println "checking existense of 3dp certs..."
+		//def cert3dp = '${projectDir}/engTmp/certs/enginuity/3dp/${Passportcertname}'
+		if (file(projectDir.path+"/engTmp/certs/enginuity/3dp/"+Passportcertname).exists()){
+					println "3DP certificate is available in project directory!"
+		} else{
+			throw new GradleException("3DP certificate missing !!!!!!!!!") 
+		}
+
+		//Drop certs if already exist in keystore and cacerts
+		println "Check if certificates already exist in keystore..."
+		def keystoreCheck = new ByteArrayOutputStream()
+        exec {
+                workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+                commandLine "sh", "-c", "/opt/java11/bin/keytool -list -keystore keystore.jks -storepass changeit"
+				standardOutput = keystoreCheck
+        }
+		//def file = new File('/opt/Enginuity/2022x/payara5/glassfish/domains/enginuity/config/keystoreCheck.txt')
+		String fileContent = keystoreCheck.toString()
+		if (fileContent.contains('enginuitywsca')){
+			println "dropping SSL certs in keystore..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -delete -alias enginuitywsca -keystore keystore.jks -storepass changeit"
+			}
+		} 
+		if (fileContent.contains('pgca')){
+			println "dropping FCS certs in keystore..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -delete -alias pgca -keystore keystore.jks -storepass changeit"
+			}
+		} 
+		if (fileContent.contains('3dpca')){
+			println "dropping 3dp certs in keystore..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -delete -alias 3dpca -keystore keystore.jks -storepass changeit"
+			}
+		} 
+
+		println "Check if certificates already exist in cacerts..."
+		def cacertsCheck = new ByteArrayOutputStream()
+		exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine "sh", "-c", "/opt/java11/bin/keytool -list -keystore cacerts.jks -storepass changeit"
+				standardOutput = cacertsCheck
+		}
+		//def file2 = new File('/opt/Enginuity/2022x/payara5/glassfish/domains/enginuity/config/cacertsCheck.txt')
+		String fileContent2 = cacertsCheck.toString()
+		if (fileContent2.contains('enginuitywsca')){
+			println "dropping SSL certs in cacerts..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -delete -alias enginuitywsca -keystore cacerts.jks -storepass changeit"
+			}
+		}
+		if (fileContent2.contains('pgca')){
+			println "dropping FCS certs in cacerts..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -delete -alias pgca -keystore cacerts.jks -storepass changeit"
+			}
+		}
+		if (fileContent2.contains('3dpca')){
+			println "dropping 3dp certs in cacerts..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -delete -alias 3dpca -keystore cacerts.jks -storepass changeit"
+			}
+		}
+
+		//Importing
+		println "Importing Enginuity FCS certificate to keystore..."
+		exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+			commandLine 'sh', '-c', "/opt/java11/bin/keytool -noprompt -import -alias pgca -file ${projectDir}/engTmp/certs/enginuity/fcs/${FCScertname} -keystore keystore.jks -storepass changeit"
+		}
+		
+		println "Importing Enginuity FCS certificate to cacerts..."
+		exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+			commandLine 'sh', '-c', "/opt/java11/bin/keytool -noprompt -import -alias pgca -file ${projectDir}/engTmp/certs/enginuity/fcs/${FCScertname} -keystore cacerts.jks -storepass changeit"
+		}
+		
+		println "Exporting Enginuity SSL certificates using openssl...."
+        exec {
+                workingDir "${projectDir}/engTmp/certs/enginuity/ssl/${GLASSFISH_SERVER_NAME}"
+                commandLine "sh", "-c", "openssl pkcs12 -export -in ${GLASSFISH_SERVER_NAME}.crt -inkey ${GLASSFISH_SERVER_NAME}.key -out ${GLASSFISH_SERVER_NAME}.p12 -name enginuitywsca -password pass:changeit"
+        }
+
+        println "Importing Enginuity SSL certificate to keystore.jks..."
+        exec {
+                workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+                commandLine "sh", "-c", "/opt/java11/bin/keytool -importkeystore -destkeystore keystore.jks -srckeystore ${projectDir}/engTmp/certs/enginuity/ssl/${GLASSFISH_SERVER_NAME}/${GLASSFISH_SERVER_NAME}.p12 -srcstoretype PKCS12 -alias enginuitywsca -srcstorepass changeit -deststorepass changeit"
+        }
+
+		println "Importing Enginuity SSL certificate to cacerts.jks..."
+        exec {
+                workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+                commandLine "sh", "-c", "/opt/java11/bin/keytool -importkeystore -destkeystore cacerts.jks -srckeystore ${projectDir}/engTmp/certs/enginuity/ssl/${GLASSFISH_SERVER_NAME}/${GLASSFISH_SERVER_NAME}.p12 -srcstoretype PKCS12 -alias enginuitywsca -srcstorepass changeit -deststorepass changeit"
+        }
+
+		println "Importing 3DP certificate to keystore..."
+			exec {
+				workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+				commandLine 'sh', '-c', "/opt/java11/bin/keytool -noprompt -import -alias 3dpca -file ${projectDir}/engTmp/certs/enginuity/3dp/${Passportcertname} -keystore keystore.jks -storepass changeit"
+			}
+			
+		println "Importing 3DP certificate to cacerts..."
+		exec {
+			workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+			commandLine 'sh', '-c', "/opt/java11/bin/keytool -noprompt -import -alias 3dpca -file ${projectDir}/engTmp/certs/enginuity/3dp/${Passportcertname} -keystore cacerts.jks -storepass changeit"
+		}
+	}
+}
+
+task checkCertImport_EngStart(){
+        doFirst(){
+                println "checkCertImport_EngStart... asadmin"
+                exec {
+                        workingDir "${ENGINUITY_HOME}/payara5/glassfish/bin"
+                        commandLine "sh", "-c", "./asadmin --port 9948 --user admin --passwordfile enginuitygf.pwdfile set configs.config.server-config.network-config.protocols.protocol.http-listener-2.ssl.cert-nickname=enginuitywsca"
+                }
+
+                println "Restarting domain...."
+                exec {
+                        workingDir "${ENGINUITY_HOME}/payara5/glassfish/bin"
+                        commandLine "sh", "-c", "./asadmin --port 9948 --user admin --passwordfile enginuitygf.pwdfile restart-domain enginuity"
+                }
+
+                println "Check if certificates importation is successful in keystore..."
+                def keystoreCheck = new ByteArrayOutputStream()
+				exec {
+						workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+						commandLine "sh", "-c", "/opt/java11/bin/keytool -list -keystore keystore.jks -storepass changeit"
+						standardOutput = keystoreCheck
+				}
+				String fileContent = keystoreCheck.toString()
+				if (fileContent.contains('enginuitywsca')){
+					println "SSL Certificate imported successfully!!"
+				} else{
+					throw new GradleException("Error..SSL Certificate was not imported successfully")
+				}
+				if (fileContent.contains('pgca')){
+					println "FCS Certificate imported successfully!!"
+				} else{
+					throw new GradleException("Error..FCS Certificate was not imported successfully")
+				}
+				if (fileContent.contains('3dpca')){
+					println "3DP Certificate imported successfully!!"
+				} else{
+					throw new GradleException("Error..3DP Certificate was not imported successfully")
+				}
+
+				println "Check if certificates importation is successful in cacerts..."
+				def cacertsCheck = new ByteArrayOutputStream()
+				exec {
+					workingDir "${ENGINUITY_HOME}/payara5/glassfish/domains/enginuity/config"
+					commandLine "sh", "-c", "/opt/java11/bin/keytool -list -keystore cacerts.jks -storepass changeit"
+					standardOutput = cacertsCheck
+				}
+				String fileContent2 = cacertsCheck.toString()
+				if (fileContent2.contains('enginuitywsca')){
+					println "SSL Certificate imported successfully!!"
+				} else{
+					throw new GradleException("Error..SSL Certificate was not imported successfully")
+				}				
+				if (fileContent2.contains('pgca')){
+					println "FCS Certificate imported successfully!!"
+				} else{
+					throw new GradleException("Error..FCS Certificate was not imported successfully")
+				}
+				if (fileContent2.contains('3dpca')){
+					println "3DP Certificate imported successfully!!"
+				} else{
+					throw new GradleException("Error..3DP Certificate was not imported successfully")
+				}
+
+        }
+}
+
+task PostInstall3DP(){
+	doFirst(){			
+			println "3DP_TOMCAT_HOME_DIR is ${passport_TOMCAT_HOME_DIR}"
+
+			println "Starting 3DP TomEE to extract war file...."
+            exec {
+                workingDir "${passport_TOMCAT_HOME_DIR}/bin"
+                commandLine "sh", "-c", "./startup.sh"
+            }
+			sleep(1000 * 30)
+			println "Shuting down 3DP service...."
+            exec {
+                workingDir "${passport_TOMCAT_HOME_DIR}/bin"
+                commandLine "sh", "-c", "./shutdown.sh"
+            }
+
+			/*copy{
+				from zipTree("${passport_TOMCAT_HOME_DIR}/webapps/3dpassport.war")
+				include "3dpassport/*"
+				into "${passport_TOMCAT_HOME_DIR}/webapps"
+			}*/
+
+
+			println "Updating cas.session.timeout.sliding in cas.properties...."
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/classes/cas.properties", token: 'cas.session.timeout.sliding=7200000', value: 'cas.session.timeout.sliding=14400000')
+
+            println "Updating cas.tgt.numberOfUses in cas.properties...."
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/classes/cas.properties", token: 'cas.tgt.numberOfUses=500', value: 'cas.tgt.numberOfUses=1500')
+
+            println "Updating sessionFactory.dataSource.maxPoolSize in ac-repos.xml...."
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/ac-repos.xml", token: '<entry key="sessionFactory.dataSource.maxPoolSize" value="30"/>', value: '<entry key="sessionFactory.dataSource.maxPoolSize" value="50"/>')
+
+            println "Updating maxPoolSize in applicationContext-cas.xml and applicationContext-sql.xml...."
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-cas.xml", token: '<property name="maxPoolSize" value="30" />', value: '<property name="maxPoolSize" value="50" />')
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-sql.xml", token: '<property name="maxPoolSize" value="30" />', value: '<property name="maxPoolSize" value="50" />')
+
+            println "Updating unreturnedConnectionTimeout in applicationContext-cas.xml and applicationContext-sql.xml...."
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-cas.xml", token: '<property name="numHelperThreads" value="3" />', value: '<property name="numHelperThreads" value="3" /> \n        <property name="unreturnedConnectionTimeout" value="15" />')
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/applicationContext-sql.xml", token: '<property name="numHelperThreads" value="10" />', value: '<property name="numHelperThreads" value="10" /> \n        <property name="unreturnedConnectionTimeout" value="15" />')
+
+            println "Updating fileLoggerWriter in ac-logs.xml...."
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/ac-logs.xml", token: '<bean id="dbLoggerWriter"', value: '<bean id="fileLoggerWriter" class="com.dassault_systemes.dspassport.core.logging.BasicIamLoggerWriter"/>\n\n    <bean id="dbLoggerWriter"')
+			ant.replace(file: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport/WEB-INF/spring-configuration/ac-logs.xml", token: '<property name="replacement" ref="dbLoggerWriter"/>', value: '<property name="replacement" ref="fileLoggerWriter"/>')
+			
+			ant.zip(destfile: "${passport_TOMCAT_HOME_DIR}/webapps/3dpassport.war"){
+				fileset(dir:"${passport_TOMCAT_HOME_DIR}/webapps"){
+					include(name:"3dpassport/*")
+				}
+				update="true"
+			}
+
+			exec{
+				workingDir "${passport_TOMCAT_HOME_DIR}/webapps"
+                commandLine "rm", "-rf", "3dpassport"
+			}
+    }
+}
+
+task PostInstall3DD(){
+	doFirst(){
+			println "3DD_TOMCAT_HOME_DIR is ${dashboard_TOMCAT_HOME_DIR}"
+
+			println "Starting 3DD TomEE to extract war file...."
+            exec {
+                workingDir "${dashboard_TOMCAT_HOME_DIR}/bin"
+                commandLine "sh", "-c", "./startup.sh"
+            }
+			sleep(1000 * 10)
+			println "Shuting down 3DP service...."
+            exec {
+                workingDir "${dashboard_TOMCAT_HOME_DIR}/bin"
+                commandLine "sh", "-c", "./shutdown.sh"
+            }
+
+			println "Updating web.xml...."
+			ant.replace(file: "${dashboard_TOMCAT_HOME_DIR}/webapps/3ddashboard/WEB-INF/web.xml", token: '</cookie-config>', value: '</cookie-config>\n    <tracking-mode>COOKIE</tracking-mode>')
+    }
+}
+
+
+task PostInstallFCS(){
+	doFirst(){
+			println "Updating mxEnv.sh...."
+			ant.replace(file: "${__3DX_HOME_DIR_}/fcs/scripts/mxEnv.sh", token: 'MX_JAVA_OPTIONS="-Dfile.encoding=UTF-8 -Djava.awt.headless=true -Xss1024k -Xms960m -Xmx960m  "', value: '#MX_JAVA_OPTIONS="-Dfile.encoding=UTF-8 -Djava.awt.headless=true -Xss1024k -Xms960m -Xmx960m  " \nMX_JAVA_OPTIONS="-Xss1m -Xms8g -Xmx8g  -Xmn4g -XX:MetaspaceSize=768m -XX:MaxMetaspaceSize=768m  -XX:SurvivorRatio=3 -XX:+UseCompressedOops -XX:+DisableExplicitGC -Dfile.encoding=UTF-8 -Djava.awt.headless=true -XX:+UseShenandoahGC -Xlog:gc*:/opt/matrix/3dx/22x/fcs/logsCAS/GC_${SERVER_NAME}_`date +%F_%H-%M`.Log:time,level,tags" ')
+
+    }
+}
