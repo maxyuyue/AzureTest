@@ -5,12 +5,44 @@ plugins {
 plugins {
   id "net.linguica.maven-settings" version "0.5"
 }
+apply plugin: 'maven-publish'
 ext {
 	projectDir   = "E:/Work/AzureTest"
 	silentInstallZip = "SilentInstallScripts.zip"
 	projectFolder = "${projectDir}"
 	si_dir =  "${projectDir}/_si/"
 }
+
+publishing() { 
+    publications { 
+        myPublication(MavenPublication) { 
+            groupId 'testDemo' 
+            artifactId 'SilentInstallScripts' 
+            version '1.0' 
+            artifact 'E:/Work/AzureTest/SilentInstallScripts.zip' 
+        } 
+    } 
+
+    repositories { 
+       maven {
+		url 'https://pkgs.dev.azure.com/yueyu0121/_packaging/yueyu0121/maven/v1'
+		name 'yueyu0121'
+      authentication {
+        basic(BasicAuthentication)
+    	}
+	  }
+    } 
+} 
+ 
+repositories() { 
+		maven {
+			url 'https://pkgs.dev.azure.com/yueyu0121/_packaging/yueyu0121/maven/v1'
+			name 'yueyu0121'
+			authentication {
+				basic(BasicAuthentication)
+			}
+		}
+    } 
 
 
 println "Workspace Directory :: workspace"
