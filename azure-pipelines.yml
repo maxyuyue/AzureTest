@@ -17,7 +17,7 @@ steps:
 - task: Gradle@2
   inputs:
     gradleWrapperFile: 'gradlew'
-    options: '-b build.gradle'
+    options: '-b test.gradle'
     tasks: 'autobuild'
     publishJUnitResults: true
     testResultsFiles: '**/TEST-*.xml'
