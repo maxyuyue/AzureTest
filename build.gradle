@@ -78,7 +78,11 @@ task zipFiles(type: Zip) {
 		destinationDirectory = file("${projectDir}")
 		from "${si_dir}"
 		exclude "*.zip"
-		println "--> Compress/Zip all files from si folder...${si_dir}"
+		exclude "build.gradle"
+		exclude "*.yml"
+		doLast{
+			println "--> Compress/Zip all files from si folder...${si_dir}"
+		}
 	
 
 }
