@@ -1,1 +1,1 @@
-rootProject.buildFileName = 'sampleInstall.gradle'
+rootProject.buildFileName = 'deploy.gradle'

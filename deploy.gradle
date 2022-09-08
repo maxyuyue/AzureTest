@@ -1,0 +1,21 @@
+//SILENT_INSTALL_PROPERTY_PATH - Set this property and value (path of slient_install.properties" on node.
+
+plugins {
+    id 'java'
+    id 'application'
+}	
+allprojects {
+    apply plugin: 'java'
+}
+
+
+println "Workspace Directory :: workspace"
+println "Project :: projectName"
+println project.name
+
+
+task clear(type: Delete) {	
+	  delete fileTree(dir:"E:/Work/DeployTest", exclude:'deploy.gradle')
+}
+
+
