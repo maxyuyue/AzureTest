@@ -15,7 +15,8 @@ println project.name
 
 
 task clear(type: Delete) {	
-	  delete fileTree(dir:"E:/Work/DeployTest", exclude:'deploy.gradle')
+	println 'deleting files'
+	  delete fileTree(dir:"E:/Work/DeployTest", exclude:'.gradle')
 }
 
 
